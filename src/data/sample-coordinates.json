@@ -1,0 +1,27 @@
+[
+  {
+    "latitude": 19.8762,
+    "longitude": 77.3012,
+    "name": "P1 - North West"
+  },
+  {
+    "latitude": 19.8770,
+    "longitude": 77.3025,
+    "name": "P2 - North East"
+  },
+  {
+    "latitude": 19.8760,
+    "longitude": 77.3035,
+    "name": "P3 - East"
+  },
+  {
+    "latitude": 19.8750,
+    "longitude": 77.3020,
+    "name": "P4 - South East"
+  },
+  {
+    "latitude": 19.8745,
+    "longitude": 77.3005,
+    "name": "P5 - South West"
+  }
+]
