@@ -3,14 +3,14 @@ export function calculateDistance(lat1, lon1, lat2, lon2) {
   const R = 6371000; // Earth radius in meters
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
-  
+
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(toRad(lat1)) *
       Math.cos(toRad(lat2)) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
-  
+
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -22,63 +22,41 @@ export function calculateBearing(lat1, lon1, lat2, lon2) {
   const x =
     Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
     Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
-  
+
   const bearing = toDeg(Math.atan2(y, x));
   return (bearing + 360) % 360;
 }
 
-// Move point towards bearing by distance
-export function movePoint(lat, lon, bearing, distanceMeters) {
-  const R = 6371000;
-  const angularDistance = distanceMeters / R;
-  const bearingRad = toRad(bearing);
-  
-  const lat1 = toRad(lat);
-  const lon1 = toRad(lon);
-  
-  const lat2 = Math.asin(
-    Math.sin(lat1) * Math.cos(angularDistance) +
-    Math.cos(lat1) * Math.sin(angularDistance) * Math.cos(bearingRad)
-  );
-  
-  const lon2 =
-    lon1 +
-    Math.atan2(
-      Math.sin(bearingRad) * Math.sin(angularDistance) * Math.cos(lat1),
-      Math.cos(angularDistance) - Math.sin(lat1) * Math.sin(lat2)
-    );
-  
-  return {
-    latitude: toDeg(lat2),
-    longitude: toDeg(lon2),
-  };
-}
-
-// Calculate total perimeter of farm boundary
-export function calculatePerimeter(coordinates) {
-  let totalDistance = 0;
-  const n = coordinates.length;
-  
-  for (let i = 0; i < n; i++) {
-    const lat1 = coordinates[i].latitude;
-    const lon1 = coordinates[i].longitude;
-    const lat2 = coordinates[(i + 1) % n].latitude;
-    const lon2 = coordinates[(i + 1) % n].longitude;
-    
-    totalDistance += calculateDistance(lat1, lon1, lat2, lon2);
-  }
-  
-  return totalDistance; // Returns meters
-}
-
-// Get direction name from bearing
+// Get direction name from bearing (8-wind cardinal classification per spec)
+// 0° ± 22.5°       = North
+// 22.5°–67.5°       = North-East
+// 67.5°–112.5°      = East
+// 112.5°–157.5°     = South-East
+// 157.5°–202.5°     = South
+// 202.5°–247.5°     = South-West
+// 247.5°–292.5°     = West
+// 292.5°–337.5°     = North-West
 export function getBearingName(bearing) {
-  const directions = [
-    'N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
-    'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW',
-  ];
-  const index = Math.round(bearing / 22.5) % 16;
-  return directions[index];
+  if (bearing >= 337.5 || bearing < 22.5) return 'N';
+  if (bearing < 67.5) return 'NE';
+  if (bearing < 112.5) return 'E';
+  if (bearing < 157.5) return 'SE';
+  if (bearing < 202.5) return 'S';
+  if (bearing < 247.5) return 'SW';
+  if (bearing < 292.5) return 'W';
+  return 'NW';
+}
+
+// Check if farmer is within proximity threshold of target point
+// Returns { withinThreshold: boolean, proximityState: string }
+export function checkProximity(distance, threshold = 10) {
+  if (distance <= threshold / 3) {
+    return { withinThreshold: true, proximityState: 'TARGET_REACHED' };
+  }
+  if (distance <= threshold) {
+    return { withinThreshold: true, proximityState: 'APPROACHING_TARGET' };
+  }
+  return { withinThreshold: false, proximityState: null };
 }
 
 // Helper: degrees to radians

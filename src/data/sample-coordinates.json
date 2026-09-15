@@ -1,27 +1,22 @@
 [
   {
-    "latitude": 19.8762,
-    "longitude": 77.3012,
-    "name": "P1 - North-West Corner"
+    "latitude": 18.4562,
+    "longitude": 73.87177,
+    "name": "P1"
+  },
+  { 
+    "latitude": 18.45600,
+    "longitude": 73.86944,
+    "name": "P2"
   },
   {
-    "latitude": 19.8770,
-    "longitude": 77.3025,
-    "name": "P2 - North-East Corner"
+    "latitude": 18.45487795,
+    "longitude": 73.8710848,
+    "name": "P3"
   },
   {
-    "latitude": 19.8760,
-    "longitude": 77.3035,
-    "name": "P3 - East Side"
-  },
-  {
-    "latitude": 19.8750,
-    "longitude": 77.3020,
-    "name": "P4 - South-East Corner"
-  },
-  {
-    "latitude": 19.8745,
-    "longitude": 77.3005,
-    "name": "P5 - South-West Corner"
+    "latitude": 18.45559122045069,
+    "longitude": 73.87228897786203,
+    "name": "P4"
   }
 ]

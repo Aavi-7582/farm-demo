@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   calculateDistance,
   calculateBearing,
-  calculatePerimeter,
   getBearingName,
-} from  '../utils/geoMath';
+  checkProximity,
+} from '../utils/geoMath';
 import './FarmDemo.css';
 
-// Sample farm boundary coordinates
+// Sample farm boundary coordinates - hardcoded as per spec priority #1
 const SAMPLE_COORDINATES = [
   { latitude: 20.1855, longitude: 77.3055, name: 'P1 - Start' },
   { latitude: 20.1860, longitude: 77.3065, name: 'P2' },
@@ -27,35 +27,72 @@ export default function FarmDemo() {
   const [accuracy, setAccuracy] = useState(null);
   const [locationError, setLocationError] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [locationState, setLocationState] = useState('SEARCHING_FOR_LOCATION');
+  const [gpsAccuracyDisplay, setGpsAccuracyDisplay] = useState(null);
+  const markPointRef = useRef(null);
 
   // Real GPS Tracking
   useEffect(() => {
     if (!navigator.geolocation) {
       setLocationError('Geolocation not supported on this device');
+      setLocationState('GPS_UNAVAILABLE');
       return;
     }
 
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
-        setCurrentPos({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+        setCurrentPos({ latitude: lat, longitude: lon });
         setAccuracy(position.coords.accuracy);
         setLocationEnabled(true);
         setLocationError(null);
         setLastUpdate(new Date().toLocaleTimeString());
+
+        // Update location state based on accuracy and distance
+        if (!currentPos || !coordinates[waypointIndex]) {
+          setLocationState('LOCATION_AVAILABLE');
+          return;
+        }
+
+        const nextWaypoint = coordinates[waypointIndex];
+        const distance = calculateDistance(
+          currentPos.latitude,
+          currentPos.longitude,
+          nextWaypoint.latitude,
+          nextWaypoint.longitude
+        );
+
+        // Set GPS accuracy display
+        setGpsAccuracyDisplay(`±${Math.round(position.coords.accuracy)}m`);
+
+        // Determine location state per spec §9
+        if (position.coords.accuracy > 50) {
+          setLocationState('LOW_ACCURACY');
+        } else if (distance > 50) {
+          setLocationState('TARGET_FAR');
+        } else if (distance > 15) {
+          setLocationState('APPROACHING_TARGET');
+        } else if (distance > 5) {
+          setLocationState('TARGET_REACHED');
+        } else {
+          setLocationState('POINT_MARKED');
+        }
       },
       (error) => {
         let errorMsg = 'Unknown error';
         if (error.code === error.PERMISSION_DENIED) {
           errorMsg = 'Location permission denied. Please enable location access.';
+          setLocationState('GPS_UNAVAILABLE');
         } else if (error.code === error.POSITION_UNAVAILABLE) {
           errorMsg = 'Location unavailable. Try moving to an open area.';
+          setLocationState('LOW_ACCURACY');
         } else if (error.code === error.TIMEOUT) {
           errorMsg = 'Location request timed out.';
+          setLocationState('GPS_UNAVAILABLE');
         }
         setLocationError(errorMsg);
+        setLocationEnabled(false);
       },
       {
         enableHighAccuracy: true,
@@ -65,9 +102,9 @@ export default function FarmDemo() {
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
+  }, [currentPos, waypointIndex, visitedWaypoints, coordinates, completed]);
 
-  // Auto-advance when close to waypoint
+  // Auto-advance when close to waypoint (per spec §3, §4 proximity thresholds)
   useEffect(() => {
     if (!currentPos || completed) return;
 
@@ -79,13 +116,14 @@ export default function FarmDemo() {
       nextWaypoint.longitude
     );
 
-    if (distance < 10 && !visitedWaypoints[waypointIndex]) {
-      // Mark waypoint as visited
+    // Spec: 15m = "Walk toward the green direction", 5m = "You are near", <=5m = "Point reached"
+    if (distance < 15 && !visitedWaypoints[waypointIndex]) {
+      // Mark waypoint as visited per spec §4
       const updated = [...visitedWaypoints];
       updated[waypointIndex] = true;
       setVisitedWaypoints(updated);
 
-      // Move to next waypoint or complete
+      // Move to next waypoint or complete per spec §5
       if (waypointIndex + 1 < coordinates.length) {
         setWaypointIndex(waypointIndex + 1);
       } else {
@@ -104,6 +142,21 @@ export default function FarmDemo() {
     }
   };
 
+  // Manual MARK POINT action per spec §4
+  const handleMarkPoint = () => {
+    // Mark the current waypoint
+    const updated = [...visitedWaypoints];
+    updated[waypointIndex] = true;
+    setVisitedWaypoints(updated);
+
+    // Advance to next waypoint or complete per spec §4
+    if (waypointIndex + 1 < coordinates.length) {
+      setWaypointIndex(waypointIndex + 1);
+    } else {
+      setCompleted(true);
+    }
+  };
+
   // Loading state - waiting for location
   if (!locationEnabled) {
     return (
@@ -117,13 +170,11 @@ export default function FarmDemo() {
           <div className="loading-icon">📍</div>
           <h2>Requesting Location Access...</h2>
           <p>Your location is needed to guide you to each farm boundary point</p>
-
           {locationError ? (
             <div className="error-box">
               <p>⚠️ {locationError}</p>
               <p style={{ fontSize: '0.85rem', marginTop: '10px' }}>
-                On Android: Settings → Location → Permissions → Allow  
-                <br />
+                On Android: Settings → Location → Permissions → Allow<br />
                 On iPhone: Settings → Privacy → Location Services → Allow
               </p>
               <button onClick={handleRequestLocation} className="btn-primary">
@@ -158,28 +209,21 @@ export default function FarmDemo() {
     );
   }
 
-  // Completion screen
+  // Completion screen - per spec §11, do NOT calculate/emphasize farm area
   if (completed) {
-    const perimeter = calculatePerimeter(coordinates);
-    const perimeterKm = (perimeter / 1000).toFixed(2);
-    
     return (
       <div className="farm-demo-container">
         <div className="completion-screen">
           <div className="success-icon">✅</div>
           <h2>All Boundary Points Marked!</h2>
-          
+
           <div className="result-card">
             <div className="result-row">
               <span>🎯 Boundary Points Marked:</span>
               <strong>{coordinates.length} / {coordinates.length}</strong>
             </div>
             <div className="result-row">
-              <span>📏 Farm Perimeter:</span>
-              <strong>{perimeterKm} km ({Math.round(perimeter)} m)</strong>
-            </div>
-            <div className="result-row">
-              <span>🚩 Status:</span>
+              <span>📏 Status:</span>
               <strong style={{ color: '#28a745' }}>Ready for Fencing</strong>
             </div>
           </div>
@@ -202,13 +246,12 @@ export default function FarmDemo() {
             <ul>
               <li>✓ All boundary points are marked on your field</li>
               <li>✓ You have physical markers at each boundary point</li>
-              <li>✓ Farm perimeter is clearly defined: <strong>{perimeterKm} km</strong></li>
+              <li>✓ Farm boundary is clearly defined for fencing</li>
               <li>✓ Ready to proceed with fencing or land documentation</li>
             </ul>
           </div>
-
-          <button 
-            onClick={() => window.location.reload()} 
+          <button
+            onClick={() => window.location.reload()}
             className="btn-primary"
           >
             🔄 Mark Another Farm
@@ -218,7 +261,7 @@ export default function FarmDemo() {
     );
   }
 
-  // Main navigation screen
+  // Main navigation screen per spec
   const nextWaypoint = coordinates[waypointIndex];
   const distance = calculateDistance(
     currentPos.latitude,
@@ -234,6 +277,10 @@ export default function FarmDemo() {
   );
   const directionName = getBearingName(bearing);
 
+  // Proximity check per spec §3, §8
+  const proximity = checkProximity(distance, 15); // 15m configurable threshold
+  const progressWidth = proximity.withinThreshold ? 100 : Math.max(0, Math.min(100, (200 - distance) / 2));
+
   return (
     <div className="farm-demo-container">
       <div className="header">
@@ -245,8 +292,8 @@ export default function FarmDemo() {
         {/* Compass & Direction */}
         <div className="compass-section">
           <div className="arrow-container">
+            {/* Rotating arrow pointing to waypoint */}
             <svg width="200" height="200" viewBox="0 0 200 200">
-              {/* Rotating arrow pointing to waypoint */}
               <g transform={`translate(100,100) rotate(${bearing})`}>
                 <polygon
                   points="0,-60 15,-20 0,0 -15,-20"
@@ -273,6 +320,24 @@ export default function FarmDemo() {
               <div className="bearing-value">{Math.round(bearing)}°</div>
               <div className="bearing-direction">{directionName}</div>
             </div>
+
+            {/* Manual MARK POINT button when within proximity threshold */}
+            {proximity.withinThreshold && !completed ? (
+              <div className="mark-point-btn">
+                <button
+                  onClick={handleMarkPoint}
+                  className="btn-primary"
+                  aria-label="Mark current point as boundary point"
+                >
+                  🟢 MARK POINT
+                </button>
+                <p style={{ fontSize: '0.85rem', marginTop: '8px', color: '#28a745' }}>
+                  {proximity.proximityState === 'TARGET_REACHED'
+                    ? 'You are near the boundary point'
+                    : 'Walk toward the green direction'}
+                </p>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -281,42 +346,58 @@ export default function FarmDemo() {
           {/* Boundary Point */}
           <div className="waypoint-info">
             <h3>📍 Next Boundary Point: {nextWaypoint.name}</h3>
-            <p className="boundary-instruction">Go to this point and mark it with a stone/flag</p>
+            <p className="boundary-instruction">
+              Go to this point and mark it with a stone/flag
+            </p>
+
             <div className="distance-display">
               <div className="distance-value">{Math.round(distance)}</div>
               <div className="distance-label">meters away</div>
             </div>
+
+            {/* Progress bar showing proximity */}
             <div className="progress-bar">
-              <div className="progress-fill" style={{ width: `${Math.max(0, Math.min(100, (200 - distance) / 2))}%` }}></div>
+                          <div
+                            className="progress-fill"
+                            style={{ width: `${progressWidth}%` }}
+                          ></div>
+                        </div>
+
+            {/* GPS Status */}
+            <div className="gps-status">
+              <h4>📍 GPS Status</h4>
+              <div className="gps-detail">
+                <span>Current Position:</span>
+                <code>
+                  {currentPos.latitude.toFixed(6)}, {currentPos.longitude.toFixed(
+                    6
+                  )}
+                </code>
+              </div>
+              <div className="gps-detail">
+                <span>Accuracy:</span>
+                <code>{gpsAccuracyDisplay || '±0m'}</code>
+              </div>
+              <div className="gps-detail">
+                <span>Last Update:</span>
+                <code>{lastUpdate}</code>
+              </div>
+              <div className="gps-detail">
+                <span>Location State:</span>
+                <code>{locationState}</code>
+              </div>
             </div>
           </div>
 
-          {/* GPS Status */}
-          <div className="gps-status">
-            <h4>📍 GPS Status</h4>
-            <div className="gps-detail">
-              <span>Current Position:</span>
-              <code>{currentPos.latitude.toFixed(6)}, {currentPos.longitude.toFixed(6)}</code>
-            </div>
-            <div className="gps-detail">
-              <span>Accuracy:</span>
-              <code>±{Math.round(accuracy)}m</code>
-            </div>
-            <div className="gps-detail">
-              <span>Last Update:</span>
-              <code>{lastUpdate}</code>
-            </div>
-          </div>
-
-          {/* Boundary Points Checklist */}
+          {/* Boundary Points Checklist per spec §10 */}
           <div className="waypoint-checklist">
             <h4>🚩 Boundary Points</h4>
             {coordinates.map((coord, idx) => (
               <div
                 key={idx}
-                className={`waypoint-item ${visitedWaypoints[idx] ? 'visited' : ''} ${
-                  waypointIndex === idx ? 'active' : ''
-                }`}
+                className={`waypoint-item ${
+                  visitedWaypoints[idx] ? 'visited' : ''
+                } ${waypointIndex === idx ? 'active' : ''}`}
               >
                 <span className="waypoint-marker">
                   {visitedWaypoints[idx] ? '✅' : idx + 1}
@@ -329,14 +410,25 @@ export default function FarmDemo() {
             ))}
           </div>
 
-          {/* Instructions */}
+          {/* Instructions per spec */}
           <div className="instruction-box">
             <h4>📋 How to Mark Boundary Points:</h4>
             <p>👟 <strong>Walk</strong> towards the arrow direction</p>
             <p>📏 <strong>App shows</strong> real-time distance (updates as you walk)</p>
-            <p>🎯 <strong>Get close</strong> to the boundary point ( 10 m)</p>
-            <p>🚩 <strong>Place</strong> a stone/flag/marker at this location</p>
-            <p>✅ <strong>Point marks green</strong> automatically when nearby</p>
+            <p>
+              🎯 <strong>Get close</strong> to the boundary point{' '}
+              {distance < 15 ? '(within 15 m)' : ''}
+            </p>
+            <p>
+              🚩 <strong>Place</strong> a stone/flag/marker at this location
+            </p>
+            <p>
+              ✅ <strong>Point marks</strong> automatically when nearby{' '}
+              {distance < 15 ? '(within 15 m threshold)' : ''}
+            </p>
+            <p>
+              🎯 <strong>Tap MARK POINT</strong> button when within threshold
+            </p>
             <p>📍 Keep phone facing up for better GPS accuracy</p>
           </div>
         </div>
