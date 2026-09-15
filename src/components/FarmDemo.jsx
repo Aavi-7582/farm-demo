@@ -6,14 +6,8 @@ import {
   checkProximity,
 } from '../utils/geoMath';
 import './FarmDemo.css';
-
-// Sample farm boundary coordinates - hardcoded as per spec priority #1
-const SAMPLE_COORDINATES = [
-  { latitude: 20.1855, longitude: 77.3055, name: 'P1 - Start' },
-  { latitude: 20.1860, longitude: 77.3065, name: 'P2' },
-  { latitude: 20.1865, longitude: 77.3060, name: 'P3' },
-  { latitude: 20.1850, longitude: 77.3050, name: 'P4' },
-];
+// Single source of truth for the sample perimeter coordinates (P1 -> P2 -> P3 -> P4)
+import SAMPLE_COORDINATES from '../data/sample-coordinates.json';
 
 export default function FarmDemo() {
   const [coordinates] = useState(SAMPLE_COORDINATES);
@@ -263,6 +257,7 @@ export default function FarmDemo() {
 
   // Main navigation screen per spec
   const nextWaypoint = coordinates[waypointIndex];
+
   const distance = calculateDistance(
     currentPos.latitude,
     currentPos.longitude,
