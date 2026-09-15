@@ -87,6 +87,54 @@
   font-weight: 600;
 }
 
+.bearing-absolute {
+  font-size: 0.8rem;
+  margin-top: 6px;
+  opacity: 0.85;
+}
+
+/* Compass heading status */
+.compass-status {
+  margin-top: 12px;
+  font-size: 0.85rem;
+}
+
+.compass-ok {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.compass-wait {
+  color: #856404;
+  font-weight: 600;
+}
+
+.compass-off {
+  color: #c62828;
+  font-weight: 600;
+}
+
+.compass-perm {
+  color: #856404;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.compass-perm-btn {
+  flex: none;
+  padding: 10px 16px;
+}
+
+.compass-help {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  color: #666;
+  font-style: italic;
+}
+
 /* Status Section */
 .status-section {
   display: flex;

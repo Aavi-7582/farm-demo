@@ -8,6 +8,8 @@ import {
 import './FarmDemo.css';
 // Single source of truth for the sample perimeter coordinates (P1 -> P2 -> P3 -> P4)
 import SAMPLE_COORDINATES from '../data/sample-coordinates.json';
+import { relativeAngle } from '../utils/compassMath';
+import useDeviceHeading, { COMPASS_STATUS } from '../hooks/useDeviceHeading';
 
 export default function FarmDemo() {
   const [coordinates] = useState(SAMPLE_COORDINATES);
@@ -24,6 +26,13 @@ export default function FarmDemo() {
   const [locationState, setLocationState] = useState('SEARCHING_FOR_LOCATION');
   const [gpsAccuracyDisplay, setGpsAccuracyDisplay] = useState(null);
   const markPointRef = useRef(null);
+
+  // Dedicated device-heading (compass) mechanism, separate from GPS navigation.
+  const {
+    heading,
+    status: compassStatus,
+    requestPermission,
+  } = useDeviceHeading();
 
   // Real GPS Tracking
   useEffect(() => {
@@ -272,6 +281,20 @@ export default function FarmDemo() {
   );
   const directionName = getBearingName(bearing);
 
+  // Relative direction: target bearing minus phone heading, normalized to [-180, 180].
+  const hasHeading = heading != null;
+  const relative = hasHeading ? relativeAngle(bearing, heading) : null;
+  // Arrow points relative to where the phone faces when a heading is available;
+  // otherwise fall back to the absolute target bearing.
+  const arrowRotation = hasHeading ? relative : bearing;
+  const relativeLabel = !hasHeading
+    ? 'Compass unavailable'
+    : Math.abs(relative) <= 10
+    ? 'Walk straight'
+    : relative > 0
+    ? 'Turn right'
+    : 'Turn left';
+
   // Proximity check per spec §3, §8
   const proximity = checkProximity(distance, 15); // 15m configurable threshold
   const progressWidth = proximity.withinThreshold ? 100 : Math.max(0, Math.min(100, (200 - distance) / 2));
@@ -289,7 +312,7 @@ export default function FarmDemo() {
           <div className="arrow-container">
             {/* Rotating arrow pointing to waypoint */}
             <svg width="200" height="200" viewBox="0 0 200 200">
-              <g transform={`translate(100,100) rotate(${bearing})`}>
+              <g transform={`translate(100,100) rotate(${arrowRotation})`}>
                 <polygon
                   points="0,-60 15,-20 0,0 -15,-20"
                   fill="#ff6b6b"
@@ -312,8 +335,45 @@ export default function FarmDemo() {
 
           <div className="direction-info">
             <div className="bearing-display">
-              <div className="bearing-value">{Math.round(bearing)}°</div>
-              <div className="bearing-direction">{directionName}</div>
+              <div className="bearing-value">
+                {hasHeading ? `${Math.round(relative)}°` : '--'}
+              </div>
+              <div className="bearing-direction">{relativeLabel}</div>
+              <div className="bearing-absolute">
+                Target bearing: {Math.round(bearing)}° {directionName}
+              </div>
+            </div>
+
+            {/* Compass status + calibration help */}
+            <div className="compass-status">
+              {compassStatus === COMPASS_STATUS.ACTIVE && (
+                <span className="compass-ok">🧭 Compass active</span>
+              )}
+              {compassStatus === COMPASS_STATUS.WAITING && (
+                <span className="compass-wait">
+                  🧭 Waiting for orientation data…
+                </span>
+              )}
+              {compassStatus === COMPASS_STATUS.UNAVAILABLE && (
+                <span className="compass-off">
+                  🧭 Compass unavailable on this device
+                </span>
+              )}
+              {compassStatus === COMPASS_STATUS.PERMISSION_REQUIRED && (
+                <span className="compass-perm">
+                  🧭 Compass permission required
+                  <button
+                    onClick={requestPermission}
+                    className="btn-primary compass-perm-btn"
+                  >
+                    Enable Compass
+                  </button>
+                </span>
+              )}
+              <p className="compass-help">
+                Hold your phone flat with the screen facing up for best direction
+                accuracy.
+              </p>
             </div>
 
             {/* Manual MARK POINT button when within proximity threshold */}
