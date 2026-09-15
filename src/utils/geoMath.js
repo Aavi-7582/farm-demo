@@ -54,40 +54,21 @@ export function movePoint(lat, lon, bearing, distanceMeters) {
   };
 }
 
-export function calculatePolygonArea(coordinates) {
-  if (!coordinates || coordinates.length < 3) {
-    return 0;
+// Calculate total perimeter of farm boundary
+export function calculatePerimeter(coordinates) {
+  let totalDistance = 0;
+  const n = coordinates.length;
+  
+  for (let i = 0; i < n; i++) {
+    const lat1 = coordinates[i].latitude;
+    const lon1 = coordinates[i].longitude;
+    const lat2 = coordinates[(i + 1) % n].latitude;
+    const lon2 = coordinates[(i + 1) % n].longitude;
+    
+    totalDistance += calculateDistance(lat1, lon1, lat2, lon2);
   }
-
-  const R = 6371000;
-
-  // Use first point as local origin
-  const originLat = toRad(coordinates[0].latitude);
-  const originLon = toRad(coordinates[0].longitude);
-
-  const projected = coordinates.map((point) => {
-    const lat = toRad(point.latitude);
-    const lon = toRad(point.longitude);
-
-    const x = (lon - originLon) * Math.cos(originLat) * R;
-    const y = (lat - originLat) * R;
-
-    return { x, y };
-  });
-
-  let area = 0;
-
-  for (let i = 0; i < projected.length; i++) {
-    const current = projected[i];
-    const next = projected[(i + 1) % projected.length];
-
-    area += current.x * next.y;
-    area -= next.x * current.y;
-  }
-
-  const areaInSquareMeters = Math.abs(area) / 2;
-
-  return areaInSquareMeters / 10000;
+  
+  return totalDistance; // Returns meters
 }
 
 // Get direction name from bearing
